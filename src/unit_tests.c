@@ -1,1633 +1,351 @@
+#include "state.h"
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "asserts.h"
+#include "snake_utils.h"
 
-// Necesario por las funciones static en state.c
-#include "state.c"
+// Definiciones de funciones de ayuda.
+static void set_board_at(game_state_t* state, unsigned int row, unsigned int col, char ch);
+static bool is_tail(char c);
+static bool is_head(char c);
+static bool is_snake(char c);
+static char body_to_tail(char c);
+static char head_to_body(char c);
+static unsigned int get_next_row(unsigned int cur_row, char c);
+static unsigned int get_next_col(unsigned int cur_col, char c);
+static void find_head(game_state_t* state, unsigned int snum);
+static char next_square(game_state_t* state, unsigned int snum);
+static void update_tail(game_state_t* state, unsigned int snum);
+static void update_head(game_state_t* state, unsigned int snum);
 
-bool clear_unit_test_files() {
-  int err_in = remove("unit-test-in.snk");
-  int err_out = remove("unit-test-out.snk");
-  int err_ref = remove("unit-test-ref.snk");
-  return err_in == 0 && err_out == 0 && err_ref == 0;
-}
-
-bool test_create_default_state() {
-  game_state_t* state = create_default_state();
-
-  if (state == NULL) {
-    printf("%s\n", "create_default_state is not implemented.");
-    return false;
+/* Tarea 1 */
+//*TERMINADA
+game_state_t* create_default_state() {
+  //Guardamos memoria para estado inicial.
+  game_state_t *initial_state = malloc(sizeof(game_state_t));
+  if (!initial_state) return NULL;
+  //Configuramos dimensiones.
+  initial_state->num_rows = 18;
+  initial_state->board = malloc(sizeof(char *) * initial_state->num_rows);
+  if (!initial_state->board) {
+      free(initial_state);
+      return NULL;
   }
 
-  if (!assert_equals_unsigned_int("board width", DEFAULT_BOARD_WIDTH, 20)) {
-    return false;
-  }
+  //Tablero inicial.
+  const char *predefined_board[18] = {
+      "####################",
+      "#                  #",
+      "# d>D    *         #",
+      "#                  #",
+      "#                  #",
+      "#                  #",
+      "#                  #",
+      "#                  #",
+      "#                  #",
+      "#                  #",
+      "#                  #",
+      "#                  #",
+      "#                  #",
+      "#                  #",
+      "#                  #",
+      "#                  #",
+      "#                  #",
+      "####################"
+  };
 
-  if (!assert_equals_unsigned_int("board height", DEFAULT_BOARD_HEIGHT, state->num_rows)) {
-    return false;
-  }
-
-  // Verificar si el tablero se puede mutar
-  // Si el programa termina aqui, su tablero no puede
-  // ser mutado
-  char original_char = get_board_at(state, 0, 0);
-  set_board_at(state, 0, 0, '0');
-  set_board_at(state, 0, 0, original_char);
-
-  for (unsigned int row = 0; row < DEFAULT_BOARD_HEIGHT; row++) {
-    for (unsigned int col = 0; col < DEFAULT_BOARD_WIDTH; col++) {
-      if (row == 0 || col == 0 || row == DEFAULT_BOARD_HEIGHT - 1 || col == DEFAULT_BOARD_WIDTH - 1) {
-        if (!assert_map_equals(state, row, col, '#')) {
-          return false;
-        }
-      } else if (col == 9 && row == 2) {
-        if (!assert_map_equals(state, row, col, '*')) {
-          return false;
-        }
-      } else if (col == 2 && row == 2) {
-        if (!assert_map_equals(state, row, col, 'd')) {
-          return false;
-        }
-      } else if (col == 3 && row == 2) {
-        if (!assert_map_equals(state, row, col, '>')) {
-          return false;
-        }
-      } else if (col == 4 && row == 2) {
-        if (!assert_map_equals(state, row, col, 'D')) {
-          return false;
-        }
-      } else {
-        if (!assert_map_equals(state, row, col, ' ')) {
-          return false;
-        }
+  for (int i = 0; i < initial_state->num_rows; i++) {
+      size_t len = strlen(predefined_board[i]) + 1;
+      initial_state->board[i] = malloc(len);
+      if (!initial_state->board[i]) {
+          for (int j = 0; j < i; j++) free(initial_state->board[j]);
+          free(initial_state->board);
+          free(initial_state);
+          return NULL;
       }
-    }
-
-    if (!(get_board_at(state, row, DEFAULT_BOARD_WIDTH) ==  '\0' ||
-          (get_board_at(state, row, DEFAULT_BOARD_WIDTH) == '\n' && get_board_at(state, row, DEFAULT_BOARD_WIDTH + 1) == '\0'))) {
-      printf("Warning: we think row %d of your board does not end in a null byte", row);
-    }
+      strcpy(initial_state->board[i], predefined_board[i]);
   }
 
-  if (!assert_equals_unsigned_int("number of snakes", 1, state->num_snakes)) {
-    return false;
+  //Cantidad de serpiente al incio y guardado en memoria.
+  initial_state->num_snakes = 1;
+  initial_state->snakes = malloc(sizeof(snake_t));
+  if (!initial_state->snakes) {
+      for (int i = 0; i < initial_state->num_rows; i++) free(initial_state->board[i]);
+      free(initial_state->board);
+      free(initial_state);
+      return NULL;
   }
 
-  if (!assert_equals_unsigned_int("row of snake tail", 2, state->snakes->tail_row)) {
-    return false;
-  }
-  if (!assert_equals_unsigned_int("col of snake tail", 2, state->snakes->tail_col)) {
-    return false;
-  }
-  if (!assert_equals_unsigned_int("row of snake head", 2, state->snakes->head_row)) {
-    return false;
-  }
-  if (!assert_equals_unsigned_int("col of snake head", 4, state->snakes->head_col)) {
-    return false;
-  }
-  if (!assert_true("snake is alive", state->snakes->live)) {
-    return false;
-  }
+  //Inicializar las coordenadas de las serpiente.
+  snake_t *snake = &initial_state->snakes[0];
+  snake->live = true;
+  snake->head_row = 2;
+  snake->head_col = 4;
+  snake->tail_row = 2;
+  snake->tail_col = 2;
 
-  free_state(state);
-
-  return true;
+  return initial_state;
 }
 
-bool test_free_state() {
-  game_state_t* state = create_default_state();
-  free_state(state);
-
-  printf("%s\n", "This test case only checks for leaks in Tasks 1 and 2. Make sure that no Valgrind errors are printed!");
-
-  return true;
+/* Tarea 2 */
+//*TERMINADA
+void free_state(game_state_t* state) {
+  //Liberar cada fila del tablero.
+  for (int i = 0; i < state->num_rows; i++)
+  {
+    free(state->board[i]);
+  }
+  //Liberar el arreglo de filas.
+  free(state->board);
+  //Liberar serpientes.
+  free(state->snakes);
+  //Liberar el estado dado.
+  free(state);
+  return;
 }
 
-bool test_print_board_1() {
-  clear_unit_test_files();
-
-  char* expected =
-    "####################\n"
-    "#                  #\n"
-    "# d>D    *         #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "####################\n";
-  size_t file_size = strlen(expected);
-
-  game_state_t* state = create_default_state();
-  save_board(state, "unit-test-out.snk");
-
-  // Quemamos el tamano del archivo aqui, ya que sabemos que el tablero tiene
-  // 378 caracteres. Ustedes NO deberian quemar tamanos en su implementacion.
-  char actual[file_size + 1];
-
-  FILE* f = fopen("unit-test-out.snk", "r");
-
-  if (!assert_file_size("unit-test-out.snk", file_size)) {
-    return false;
+/* Tarea 3 */
+//*TERMINADA
+void print_board(game_state_t *state, FILE *fp) {
+  //Verificamos que si el state ni el fp sean nulos.
+  if (!state || !fp) {
+    return;
   }
+  //Creamos variables auxiliares que nos ayudaran en el while.
+  int i = 0;
+  unsigned int total_rows = state->num_rows;
+  //While que imprime el tablero completo.
+  while (i < total_rows) {
+      fprintf(fp, "%s\n", state->board[i]);
+      i++;
+  }
+}
 
-  fread(actual, file_size, 1, f);
+/**
+ * Guarda el estado actual a un archivo. No modifica el objeto/struct state.
+ * (ya implementada para que la utilicen)
+*/
+void save_board(game_state_t* state, char* filename) {
+  FILE* f = fopen(filename, "w");
+  print_board(state, f);
   fclose(f);
-  actual[file_size] = '\0';
-
-  if (strcmp(expected, actual) != 0) {
-    printf("%s\n", "Your printed board doesn't match the expected output. See unit-test-out.snk for what you printed.");
-    return false;
-  }
-
-  free_state(state);
-
-  return true;
 }
 
-bool test_print_board_2() {
-  clear_unit_test_files();
-
-  char* expected =
-    "####################\n"
-    "#                  #\n"
-    "# d>D    *         #\n"
-    "####################\n";
-  size_t file_size = strlen(expected);
-
-  game_state_t* state = create_default_state();
-  state->num_rows = 4;
-  strncpy(state->board[3], state->board[0], DEFAULT_BOARD_WIDTH);
-  save_board(state, "unit-test-out.snk");
-
-  char actual[file_size + 1];
-
-  FILE* f = fopen("unit-test-out.snk", "r");
-
-  if (!assert_file_size("unit-test-out.snk", file_size)) {
-    return false;
-  }
-
-  fread(actual, file_size, 1, f);
-  fclose(f);
-  actual[file_size] = '\0';
-
-  if (strcmp(expected, actual) != 0) {
-    printf("%s\n", "Your printed board doesn't match the expected output. See unit-test-out.snk for what you printed.");
-    return false;
-  }
-
-  free_state(state);
-
-  return true;
-}
-
-bool test_print_board() {
-  if (!test_print_board_1()) {
-    printf("%s\n", "test_print_board_1 failed. Check unit-test-out.snk for a diagram of the board.");
-    return false;
-  }
-
-  if (!test_print_board_2()) {
-    printf("%s\n", "test_print_board_2 failed. Check unit-test-out.snk for a diagram of the board.");
-    return false;
-  }
-
-  return true;
-}
-
-bool test_next_square_board_1() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 1 (por defecto):
-  ####################
-  #                  #
-  # d>D    *         #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  ####################
-  */
-
-  // crear el tablero
-  game_state_t* actual_state = create_default_state();
-  save_board(actual_state, "unit-test-out.snk");
-
-  // el siguiente valor de celda para la snake deberia ser ' '
-  if (!assert_equals_char("next_square on board 1", ' ', next_square(actual_state, 0))) {
-    return false;
-  }
-
-  // verificar que el tablero no ha cambiado
-  game_state_t* expected_state = create_default_state();
-  if (!assert_state_equals(expected_state, actual_state)) {
-    printf("%s\n", "Error: next_square should not modify board");
-    return false;
-  }
-
-  free_state(actual_state);
-  free_state(expected_state);
-
-  return true;
-}
-
-bool test_next_square_board_2() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 2:
-  ####################
-  #                  #
-  # d>D*   *         #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  ####################
-  */
-
-  game_state_t* state = create_default_state();
-
-  // crear el tablero
-  set_board_at(state, 2, 5, '*');
-  save_board(state, "unit-test-out.snk");
-
-  // el siguiente valor de celda para la snake deberia ser '*'
-  if (!assert_equals_char("next_square on board 2", '*', next_square(state, 0))) {
-    return false;
-  }
-
-  free_state(state);
-
-  return true;
-}
-
-bool test_next_square_board_3() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 3:
-  ####################
-  #                  #
-  # d>Dx   *         #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  ####################
-  */
-
-  game_state_t* state = create_default_state();
-
-  // crear tablero
-  set_board_at(state, 2, 5, 'x');
-  save_board(state, "unit-test-out.snk");
-
-  // el siguiente valor de celda para la snake deberia ser 'x'
-  if (!assert_equals_char("next_square on board 3", 'x', next_square(state, 0))) {
-    return false;
-  }
-
-  free_state(state);
-
-  return true;
-}
-
-bool test_next_square_board_4() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 4:
-  ####################
-  #   #              #
-  # d>W    *         #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  ####################
-  */
-
-  game_state_t* state = create_default_state();
-
-  // crear tablero
-  set_board_at(state, 2, 4, 'W');
-  set_board_at(state, 1, 4, '#');
-  state->snakes->head_row = 2;
-  state->snakes->head_col = 4;
-  save_board(state, "unit-test-out.snk");
-
-  // el siguiente valor de celda para la snake deberia de ser '#'
-  if (!assert_equals_char("next_square on board 4", '#', next_square(state, 0))) {
-    return false;
-  }
-
-  free_state(state);
-
-  return true;
-}
-
-bool test_next_square_board_5() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 5:
-  ####################
-  #                  #
-  # d>v    *         #
-  #   v              #
-  #   S              #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  ####################
-  */
-
-  game_state_t* state = create_default_state();
-
-  // crear tablero
-  set_board_at(state, 2, 4, 'v');
-  set_board_at(state, 3, 4, 'v');
-  set_board_at(state, 4, 4, 'S');
-  state->snakes->head_row = 4;
-  state->snakes->head_col = 4;
-  save_board(state, "unit-test-out.snk");
-
-  // el siguiente valor de celda para la snake deberia de ser ' '
-  if (!assert_equals_char("next_square on board 5", ' ', next_square(state, 0))) {
-    return false;
-  }
-
-  free_state(state);
-
-  return true;
-}
-
-bool test_next_square_board_6() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 6:
-  ####################
-  #                  #
-  # d>v    *         #
-  #   v              #
-  #   S              #
-  #   #              #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  ####################
-  */
-
-  game_state_t* state = create_default_state();
-
-  // crear tablero
-  set_board_at(state, 2, 4, 'v');
-  set_board_at(state, 3, 4, 'v');
-  set_board_at(state, 4, 4, 'S');
-  set_board_at(state, 5, 4, '#');
-  state->snakes->head_row = 4;
-  state->snakes->head_col = 4;
-  save_board(state, "unit-test-out.snk");
-
-  // el siguiente valor de celda para la snake deberia de ser '#'
-  if (!assert_equals_char("next_square on board 6", '#', next_square(state, 0))) {
-    return false;
-  }
-
-  free_state(state);
-
-  return true;
-}
-
-bool test_next_square() {
-  if (!test_next_square_board_1()) {
-    printf("%s\n", "test_next_square_board_1 failed. Check unit-test-out.snk for a diagram of the board.");
-    return false;
-  }
-
-  if (!test_next_square_board_2()) {
-    printf("%s\n", "test_next_square_board_2 failed. Check unit-test-out.snk for a diagram of the board.");
-    return false;
-  }
-
-  if (!test_next_square_board_3()) {
-    printf("%s\n", "test_next_square_board_3 failed. Check unit-test-out.snk for a diagram of the board.");
-    return false;
-  }
-
-  if (!test_next_square_board_4()) {
-    printf("%s\n", "test_next_square_board_4 failed. Check unit-test-out.snk for a diagram of the board.");
-    return false;
-  }
-
-  if (!test_next_square_board_5()) {
-    printf("%s\n", "test_next_square_board_5 failed. Check unit-test-out.snk for a diagram of the board.");
-    return false;
-  }
-
-  if (!test_next_square_board_6()) {
-    printf("%s\n", "test_next_square_board_6 failed. Check unit-test-out.snk for a diagram of the board.");
-    return false;
-  }
-
-  return true;
-}
-
-bool test_update_head_board_1() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 1 (default):
-  ####################            ####################
-  #                  #            #                  #
-  # d>D    *         #            # d>>D   *         #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  # ---------> #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  ####################            ####################
-  */
-
-  // crear el tablero esperado
-  game_state_t* expected = create_default_state();
-  set_board_at(expected, 2, 4, '>');
-  set_board_at(expected, 2, 5, 'D');
-  expected->snakes->head_row = 2;
-  expected->snakes->head_col = 5;
-  save_board(expected, "unit-test-ref.snk");
-
-  // crear el tablero actual
-  game_state_t* actual = create_default_state();
-  save_board(actual, "unit-test-in.snk");
-
-  update_head(actual, 0);
-  save_board(actual, "unit-test-out.snk");
-
-  // verificar que el tablero actual haga match con el tablero esperado
-  if (!assert_state_equals(expected, actual)) {
-    return false;
-  }
-
-  free_state(expected);
-  free_state(actual);
-
-  return true;
-}
-
-bool test_update_head_board_2() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 2:
-  ####################            ####################
-  #                  #            #   W              #
-  # d>W    *         #            # d>^    *         #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  # ---------> #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  ####################            ####################
-  */
-
-  // crear el tablero esperado
-  game_state_t* expected = create_default_state();
-  set_board_at(expected, 2, 4, '^');
-  set_board_at(expected, 1, 4, 'W');
-  expected->snakes->head_row = 1;
-  expected->snakes->head_col = 4;
-  save_board(expected, "unit-test-ref.snk");
-
-  // crear el tablero actual
-  game_state_t* actual = create_default_state();
-  set_board_at(actual, 2, 4, 'W');
-  actual->snakes->head_row = 2;
-  actual->snakes->head_col = 4;
-  save_board(actual, "unit-test-in.snk");
-
-  update_head(actual, 0);
-  save_board(actual, "unit-test-out.snk");
-
-  // verificar que el tablero actual haga match con el tablero esperado
-  if (!assert_state_equals(expected, actual)) {
-    return false;
-  }
-
-  free_state(expected);
-  free_state(actual);
-
-  return true;
-}
-
-bool test_update_head_board_3() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 3:
-  ####################            ####################
-  #   A              #            #  A<              #
-  # d>^    *         #            # d>^    *         #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  # ---------> #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  ####################            ####################
-  */
-
-  // crear el tablero esperado
-  game_state_t* expected = create_default_state();
-  set_board_at(expected, 2, 4, '^');
-  set_board_at(expected, 1, 4, '<');
-  set_board_at(expected, 1, 3, 'A');
-  expected->snakes->head_row = 1;
-  expected->snakes->head_col = 3;
-  save_board(expected, "unit-test-ref.snk");
-
-  // crear el tablero actual
-  game_state_t* actual = create_default_state();
-  set_board_at(actual, 2, 4, '^');
-  set_board_at(actual, 1, 4, 'A');
-  actual->snakes->head_row = 1;
-  actual->snakes->head_col = 4;
-  save_board(actual, "unit-test-in.snk");
-
-  update_head(actual, 0);
-  save_board(actual, "unit-test-out.snk");
-
-  // verificar que el tablero actual haga match con el tablero esperado
-  if (!assert_state_equals(expected, actual)) {
-    return false;
-  }
-
-  free_state(expected);
-  free_state(actual);
-
-  return true;
-}
-
-bool test_update_head() {
-  if (!test_update_head_board_1()) {
-    printf("%s\n", "test_update_head_board_1 failed. Check unit-test-in.snk, unit-test-out.snk, and unit-test-ref.snk.");
-    return false;
-  }
-
-  if (!test_update_head_board_2()) {
-    printf("%s\n", "test_update_head_board_2 failed. Check unit-test-in.snk, unit-test-out.snk, and unit-test-ref.snk.");
-    return false;
-  }
-
-  if (!test_update_head_board_3()) {
-    printf("%s\n", "test_update_head_board_3 failed. Check unit-test-in.snk, unit-test-out.snk, and unit-test-ref.snk.");
-    return false;
-  }
-
-  return true;
-}
-
-bool test_update_tail_board_1() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 1:
-  ####################            ####################
-  #                  #            #                  #
-  # d>>D   *         #            #  d>D   *         #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  # ---------> #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  ####################            ####################
-  */
-
-  // crear el tablero esperado
-  game_state_t* expected = create_default_state();
-  set_board_at(expected, 2, 2, ' ');
-  set_board_at(expected, 2, 3, 'd');
-  set_board_at(expected, 2, 4, '>');
-  set_board_at(expected, 2, 5, 'D');
-  expected->snakes->head_row = 2;
-  expected->snakes->head_col = 5;
-  expected->snakes->head_row = 2;
-  expected->snakes->tail_col = 3;
-  save_board(expected, "unit-test-ref.snk");
-
-  // crear el tablero actual
-  game_state_t* actual = create_default_state();
-  set_board_at(actual, 2, 4, '>');
-  set_board_at(actual, 2, 5, 'D');
-  actual->snakes->head_row = 2;
-  actual->snakes->head_col = 5;
-  save_board(actual, "unit-test-in.snk");
-
-  update_tail(actual, 0);
-  save_board(actual, "unit-test-out.snk");
-
-  // verificar que el tablero actual haga match con el tablero esperado
-  if (!assert_state_equals(expected, actual)) {
-    return false;
-  }
-
-  free_state(expected);
-  free_state(actual);
-
-  return true;
-}
-
-bool test_update_tail_board_2() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 2:
-  ####################            ####################
-  #                  #            #                  #
-  # dv     *         #            #   s    *         #
-  #  v               #            #   v              #
-  #  S               #            #   S              #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  # ---------> #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  ####################            ####################
-  */
-
-  // crear el tablero esperado
-  game_state_t* expected = create_default_state();
-  set_board_at(expected, 2, 2, ' ');
-  set_board_at(expected, 2, 3, 's');
-  set_board_at(expected, 2, 4, ' ');
-  set_board_at(expected, 3, 3, 'v');
-  set_board_at(expected, 4, 3, 'S');
-  expected->snakes->head_row = 4;
-  expected->snakes->head_col = 3;
-  expected->snakes->tail_row = 2;
-  expected->snakes->tail_col = 3;
-  save_board(expected, "unit-test-ref.snk");
-
-  // crear el tablero actual
-  game_state_t* actual = create_default_state();
-  set_board_at(actual, 2, 3, 'v');
-  set_board_at(actual, 2, 4, ' ');
-  set_board_at(actual, 3, 3, 'v');
-  set_board_at(actual, 4, 3, 'S');
-  actual->snakes->head_row = 4;
-  actual->snakes->head_col = 3;
-  save_board(actual, "unit-test-in.snk");
-
-  update_tail(actual, 0);
-  save_board(actual, "unit-test-out.snk");
-
-  // verificar que el tablero actual haga match con el tablero esperado
-  if (!assert_state_equals(expected, actual)) {
-    return false;
-  }
-
-  free_state(expected);
-  free_state(actual);
-
-  return true;
-}
-
-bool test_update_tail_board_3() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 3:
-  ####################            ####################
-  #                  #            #                  #
-  # S<     *         #            # Sa     *         #
-  #  w               #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  # ---------> #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  ####################            ####################
-  */
-
-  // crear el tablero esperado
-  game_state_t* expected = create_default_state();
-
-  save_board(expected, "unit-test-ref.snk");
-  set_board_at(expected, 2, 2, 'S');
-  set_board_at(expected, 2, 3, 'a');
-  set_board_at(expected, 2, 4, ' ');
-  expected->snakes->head_row = 2;
-  expected->snakes->head_col = 2;
-  expected->snakes->tail_row = 2;
-  expected->snakes->tail_col = 3;
-
-  // crear el tablero actual
-  game_state_t* actual = create_default_state();
-  set_board_at(actual, 2, 2, 'S');
-  set_board_at(actual, 2, 3, '<');
-  set_board_at(actual, 2, 4, ' ');
-  set_board_at(actual, 3, 3, 'w');
-  actual->snakes->head_row = 2;
-  actual->snakes->head_col = 2;
-  actual->snakes->tail_row = 3;
-  actual->snakes->tail_col = 3;
-  save_board(actual, "unit-test-in.snk");
-
-  update_tail(actual, 0);
-  save_board(actual, "unit-test-out.snk");
-
-  // verificar que el tablero actual haga match con el tablero esperado
-  if (!assert_state_equals(expected, actual)) {
-    return false;
-  }
-
-  free_state(expected);
-  free_state(actual);
-
-  return true;
-}
-
-bool test_update_tail() {
-  if (!test_update_tail_board_1()) {
-    printf("%s\n", "test_update_tail_board_1 failed. Check unit-test-in.snk, unit-test-out.snk, and unit-test-ref.snk.");
-    return false;
-  }
-
-  if (!test_update_tail_board_2()) {
-    printf("%s\n", "test_update_tail_board_2 failed. Check unit-test-in.snk, unit-test-out.snk, and unit-test-ref.snk.");
-    return false;
-  }
-
-  if (!test_update_tail_board_3()) {
-    printf("%s\n", "test_update_tail_board_3 failed. Check unit-test-in.snk, unit-test-out.snk, and unit-test-ref.snk.");
-    return false;
-  }
-
-  return true;
-}
-
-bool test_update_state_board_1() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 1 (default):
-  ####################            ####################
-  #                  #            #                  #
-  # d>D    *         #            #  d>D   *         #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  # ---------> #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  ####################            ####################
-  */
-
-  // crear el tablero esperado
-  game_state_t* expected = create_default_state();
-  set_board_at(expected, 2, 2, ' ');
-  set_board_at(expected, 2, 3, 'd');
-  set_board_at(expected, 2, 4, '>');
-  set_board_at(expected, 2, 5, 'D');
-  expected->snakes->head_row = 2;
-  expected->snakes->head_col = 5;
-  expected->snakes->tail_row = 2;
-  expected->snakes->tail_col = 3;
-  save_board(expected, "unit-test-ref.snk");
-
-  // crear el tablero actual
-  game_state_t* actual = create_default_state();
-  save_board(actual, "unit-test-in.snk");
-
-  update_state(actual, corner_food);
-  save_board(actual, "unit-test-out.snk");
-
-  // verificar que el tablero actual haga match con el tablero esperado
-  if (!assert_state_equals(expected, actual)) {
-    return false;
-  }
-
-  free_state(expected);
-  free_state(actual);
-
-  return true;
-}
-
-bool test_update_state_board_2() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 2:
-  ####################            ####################
-  #                  #            #*                 #
-  # d>D*   *         #            # d>>D   *         #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  # ---------> #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  ####################            ####################
-  */
-
-  // crear el tablero esperado
-  game_state_t* expected = create_default_state();
-  set_board_at(expected, 2, 4, '>');
-  set_board_at(expected, 2, 5, 'D');
-  set_board_at(expected, 1, 1, '*');
-  expected->snakes->head_row = 2;
-  expected->snakes->head_col = 5;
-  save_board(expected, "unit-test-ref.snk");
-
-  // crear el tablero actual
-  game_state_t* actual = create_default_state();
-  set_board_at(actual, 2, 5, '*');
-  save_board(actual, "unit-test-in.snk");
-
-  update_state(actual, corner_food);
-  save_board(actual, "unit-test-out.snk");
-
-  // verificar que el tablero actual haga match con el tablero esperado
-  if (!assert_state_equals(expected, actual)) {
-    return false;
-  }
-
-  free_state(expected);
-  free_state(actual);
-
-  return true;
-}
-
-bool test_update_state_board_3() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 3:
-  ####################            ####################
-  # >W               #            # >x               #
-  # w      *         #            # w      *         #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  # ---------> #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  ####################            ####################
-  */
-
-  // crear el tablero esperado
-  game_state_t* expected = create_default_state();
-  set_board_at(expected, 2, 2, 'w');
-  set_board_at(expected, 2, 3, ' ');
-  set_board_at(expected, 2, 4, ' ');
-  set_board_at(expected, 1, 2, '>');
-  set_board_at(expected, 1, 3, 'x');
-  expected->snakes->head_row = 1;
-  expected->snakes->head_col = 3;
-  expected->snakes->live = false;
-  save_board(expected, "unit-test-ref.snk");
-
-  // crear el tablero actual
-  game_state_t* actual = create_default_state();
-  set_board_at(actual, 2, 2, 'w');
-  set_board_at(actual, 2, 3, ' ');
-  set_board_at(actual, 2, 4, ' ');
-  set_board_at(actual, 1, 2, '>');
-  set_board_at(actual, 1, 3, 'W');
-  actual->snakes->head_row = 1;
-  actual->snakes->head_col = 3;
-  actual->snakes->tail_row = 2;
-  actual->snakes->tail_col = 2;
-  save_board(actual, "unit-test-in.snk");
-
-  update_state(actual, 0);
-  save_board(actual, "unit-test-out.snk");
-
-  // verificar que el tablero actual haga match con el tablero esperado
-  if (!assert_state_equals(expected, actual)) {
-    return false;
-  }
-
-  free_state(expected);
-  free_state(actual);
-
-  return true;
-}
-
-bool test_update_state_board_4() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 4:
-  ####################            ####################
-  # >v               #            # >v               #
-  # wA     *         #            # wx     *         #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  # ---------> #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  #                  #            #                  #
-  ####################            ####################
-  */
-
-  // crear el tablero esperado
-  game_state_t* expected = create_default_state();
-  set_board_at(expected, 2, 2, 'w');
-  set_board_at(expected, 2, 3, 'x');
-  set_board_at(expected, 2, 4, ' ');
-  set_board_at(expected, 1, 2, '>');
-  set_board_at(expected, 1, 3, 'v');
-  expected->snakes->head_row = 2;
-  expected->snakes->head_col = 3;
-  expected->snakes->live = false;
-  save_board(expected, "unit-test-ref.snk");
-
-  // crear el tablero actual
-  game_state_t* actual = create_default_state();
-  set_board_at(actual, 2, 2, 'w');
-  set_board_at(actual, 1, 2, '>');
-  set_board_at(actual, 1, 3, 'v');
-  set_board_at(actual, 2, 3, 'A');
-  set_board_at(actual, 2, 4, ' ');
-  actual->snakes->head_row = 2;
-  actual->snakes->head_col = 3;
-  actual->snakes->tail_row = 2;
-  actual->snakes->tail_col = 2;
-  save_board(actual, "unit-test-in.snk");
-
-  update_state(actual, corner_food);
-  save_board(actual, "unit-test-out.snk");
-
-  // verificar que el tablero actual haga match con el tablero esperado
-  if (!assert_state_equals(expected, actual)) {
-    return false;
-  }
-
-  free_state(expected);
-  free_state(actual);
-
-  return true;
-}
-
-bool test_update_state() {
-  if (!test_update_state_board_1()) {
-    printf("%s\n", "test_update_state_board_1 failed. Check unit-test-in.snk, unit-test-out.snk, and unit-test-ref.snk.");
-    return false;
-  }
-
-  if (!test_update_state_board_2()) {
-    printf("%s\n", "test_update_state_board_2 failed. Check unit-test-in.snk, unit-test-out.snk, and unit-test-ref.snk.");
-    return false;
-  }
-
-  if (!test_update_state_board_3()) {
-    printf("%s\n", "test_update_state_board_3 failed. Check unit-test-in.snk, unit-test-out.snk, and unit-test-ref.snk.");
-    return false;
-  }
-
-  if (!test_update_state_board_4()) {
-    printf("%s\n", "test_update_state_board_4 failed. Check unit-test-in.snk, unit-test-out.snk, and unit-test-ref.snk.");
-    return false;
-  }
-
-  return true;
-}
-
-bool test_load_board_1() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 01-simple (por defecto):
-  ####################
-  #                  #
-  # d>D    *         #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  ####################
-  */
-  char* expected =
-    "####################\n"
-    "#                  #\n"
-    "# d>D    *         #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "#                  #\n"
-    "####################\n";
-  if (!assert_load_equals("tests/01-simple-in.snk", expected)) {
-    return false;
-  }
-
-  return true;
-}
-
-bool test_load_board_2() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 06-small (pequeno):
-  #####
-  #   #
-  # W #
-  # ^ #
-  # w #
-  #####
-  */
-  char* expected =
-    "#####\n"
-    "#   #\n"
-    "# W #\n"
-    "# ^ #\n"
-    "# w #\n"
-    "#####\n";
-  if (!assert_load_equals("tests/06-small-in.snk", expected)) {
-    return false;
-  }
-
-  return true;
-}
-
-bool test_load_board_3() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 13-sus (non cuadrado):
-  ##############
-  #            #
-  #  ########  #
-  #  #      #  #####
-  #  ########      #
-  #                #
-  #      #         #
-  #                #
-  #   ######   #####
-  #   #    #   #
-  #   #    #   #
-  #####    #####
-
-  */
-  char* expected =
-    "##############\n"
-    "#            #\n"
-    "#  ########  #\n"
-    "#  #      #  #####\n"
-    "#  ########      #\n"
-    "#                #\n"
-    "#      #         #\n"
-    "#                #\n"
-    "#   ######   #####\n"
-    "#   #    #   #\n"
-    "#   #    #   #\n"
-    "#####    #####\n";
-  if (!assert_load_equals("tests/13-sus-in.snk", expected)) {
-    return false;
-  }
-
-  return true;
-}
-
-bool test_load_board() {
-  if (!test_load_board_1()) {
-    printf("%s\n", "test_load_board_1 failed. Check tests/01-simple-in.snk for a diagram of the board.");
-    return false;
-  }
-
-  if (!test_load_board_2()) {
-    printf("%s\n", "test_load_board_2 failed. Check tests/06-small-in.snk for a diagram of the board.");
-    return false;
-  }
-  if (!test_load_board_3()) {
-    printf("%s\n", "test_load_board_3 failed. Check tests/13-sus-in.snk for a diagram of the board.");
-    return false;
-  }
-
-  return true;
-}
-
-bool test_find_head_board_1() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 1:
-  ####################
-  #                  #
-  # d>v    *         #
-  #   v  W           #
-  #   v  ^           #
-  #   >>>^           #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  ####################
-  */
-
-  // crear el tablero esperado
-  game_state_t* expected = create_default_state();
-  set_board_at(expected, 2, 4, 'v');
-  set_board_at(expected, 3, 4, 'v');
-  set_board_at(expected, 4, 4, 'v');
-  set_board_at(expected, 5, 4, '>');
-  set_board_at(expected, 5, 5, '>');
-  set_board_at(expected, 5, 6, '>');
-  set_board_at(expected, 5, 7, '^');
-  set_board_at(expected, 4, 7, '^');
-  set_board_at(expected, 3, 7, 'W');
-  expected->snakes->head_row = 3;
-  expected->snakes->head_col = 7;
-  save_board(expected, "unit-test-out.snk");
-
-  // crear el tablero actual
-  game_state_t* actual = create_default_state();
-  set_board_at(actual, 2, 4, 'v');
-  set_board_at(actual, 3, 4, 'v');
-  set_board_at(actual, 4, 4, 'v');
-  set_board_at(actual, 5, 4, '>');
-  set_board_at(actual, 5, 5, '>');
-  set_board_at(actual, 5, 6, '>');
-  set_board_at(actual, 5, 7, '^');
-  set_board_at(actual, 4, 7, '^');
-  set_board_at(actual, 3, 7, 'W');
-
-  find_head(actual, 0);
-
-  // verificar que el tablero actual haga match con el tablero esperado
-  if (!assert_state_equals(expected, actual)) {
-    return false;
-  }
-
-  free_state(expected);
-  free_state(actual);
-
-  return true;
-}
-
-bool test_find_head_board_2() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 2:
-  ####################
-  #                  #
-  # d>Ds   *         #
-  #    v             #
-  #    S             #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  ####################
-  */
-
-  // crear el tablero esperado
-  game_state_t* expected = create_default_state();
-  set_board_at(expected, 2, 5, 's');
-  set_board_at(expected, 3, 5, 'v');
-  set_board_at(expected, 4, 5, 'S');
-  expected->snakes = realloc(expected->snakes, sizeof(snake_t) * 2);
-  snake_t* tmp = expected->snakes;
-  tmp->tail_row = 2;
-  tmp->tail_col = 2;
-  tmp->head_row = 2;
-  tmp->head_col = 4;
-  tmp++;
-  tmp->tail_row = 2;
-  tmp->tail_col = 5;
-  tmp->head_row = 4;
-  tmp->head_col = 5;
-  tmp->live = true;
-  expected->num_snakes = 2;
-  save_board(expected, "unit-test-out.snk");
-
-  // crear el tablero actual
-  game_state_t* actual = create_default_state();
-  set_board_at(actual, 2, 5, 's');
-  set_board_at(actual, 3, 5, 'v');
-  set_board_at(actual, 4, 5, 'S');
-  actual->snakes = realloc(actual->snakes, sizeof(snake_t) * 2);
-  tmp = actual->snakes;
-  tmp->tail_row = 2;
-  tmp->tail_col = 2;
-  tmp->head_row = 2;
-  tmp->head_col = 4;
-  tmp++;
-  tmp->tail_row = 2;
-  tmp->tail_col = 5;
-  tmp->live = true;
-  actual->num_snakes = 2;
-
-  find_head(actual, 1);
-
-  // verificar que el tablero actual haga match con el tablero esperado
-  if (!assert_state_equals(expected, actual)) {
-    return false;
-  }
-
-  free_state(expected);
-  free_state(actual);
-
-  return true;
-}
-
-bool test_find_head() {
-  if (!test_find_head_board_1()) {
-    printf("%s\n", "test_find_head_board_1 failed. Check unit-test-out.snk for a diagram of the board.");
-    return false;
-  }
-
-  if (!test_find_head_board_2()) {
-    printf("%s\n", "test_find_head_board_2 failed. Check unit-test-out.snk for a diagram of the board.");
-    return false;
-  }
-
-  return true;
-}
-
-bool test_initialize_snakes_board_1() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 1 (default):
-  ####################
-  #                  #
-  # d>D    *         #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  ####################
-  */
-
-  // crear el tablero esperado
-  game_state_t* expected = create_default_state();
-  save_board(expected, "unit-test-out.snk");
-
-  // crear el tablero actual
-  game_state_t* actual = create_default_state();
-  free(actual->snakes);
-  actual->num_snakes = 0;
-
-  actual = initialize_snakes(actual);
-
-  if (actual == NULL) {
-    printf("%s\n", "initialize_snakes is not implemented.");
-    return false;
-  }
-
-  // verificar que el tablero actual haga match con el tablero esperado
-  if (!assert_state_equals(expected, actual)) {
-    return false;
-  }
-
-  free_state(expected);
-  free_state(actual);
-
-  return true;
-}
-
-bool test_initialize_snakes_board_2() {
-  clear_unit_test_files();
-
-  /*
-  Tablero 2:
-  ####################
-  #                  #
-  # d>v    *         #
-  #   v  W           #
-  #   v  ^           #
-  #   >>>^           #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  #                  #
-  ####################
-  */
-
-  // crear el tablero esperado
-  game_state_t* expected = create_default_state();
-  set_board_at(expected, 2, 4, 'v');
-  set_board_at(expected, 3, 4, 'v');
-  set_board_at(expected, 4, 4, 'v');
-  set_board_at(expected, 5, 4, '>');
-  set_board_at(expected, 5, 5, '>');
-  set_board_at(expected, 5, 6, '>');
-  set_board_at(expected, 5, 7, '^');
-  set_board_at(expected, 4, 7, '^');
-  set_board_at(expected, 3, 7, 'W');
-  expected->snakes->head_row = 3;
-  expected->snakes->head_col = 7;
-  save_board(expected, "unit-test-out.snk");
-
-  // crear el tablero actual
-  game_state_t* actual = create_default_state();
-  set_board_at(actual, 2, 4, 'v');
-  set_board_at(actual, 3, 4, 'v');
-  set_board_at(actual, 4, 4, 'v');
-  set_board_at(actual, 5, 4, '>');
-  set_board_at(actual, 5, 5, '>');
-  set_board_at(actual, 5, 6, '>');
-  set_board_at(actual, 5, 7, '^');
-  set_board_at(actual, 4, 7, '^');
-  set_board_at(actual, 3, 7, 'W');
-  free(actual->snakes);
-  actual->num_snakes = 0;
-
-  actual = initialize_snakes(actual);
-
-  if (actual == NULL) {
-    printf("%s\n", "initialize_snakes is not implemented.");
-    return false;
-  }
-
-  // verificar que el tablero actual haga match con el tablero esperado
-  if (!assert_state_equals(expected, actual)) {
-    return false;
-  }
-
-  free_state(expected);
-  free_state(actual);
-
-  return true;
-}
-
-bool test_initialize_snakes() {
-  if (!test_initialize_snakes_board_1()) {
-    printf("%s\n", "test_initialize_snakes_board_1 failed. Check unit-test-out.snk for a diagram of the board.");
-    return false;
-  }
-
-  if (!test_initialize_snakes_board_2()) {
-    printf("%s\n", "test_initialize_snakes_board_2 failed. Check unit-test-out.snk for a diagram of the board.");
-    return false;
-  }
-
-  return true;
+/* Tarea 4.1 */
+
+
+/**
+ * Funcion de ayuda que obtiene un caracter del tablero dado una fila y columna
+ * (ya implementado para ustedes).
+*/
+char get_board_at(game_state_t* state, unsigned int row, unsigned int col) {
+  return state->board[row][col];
 }
 
 
 /**
- * Sean libres de comentar estos tests.
+ * Funcion de ayuda que actualiza un caracter del tablero dado una fila, columna y
+ * un caracter.
+ * (ya implementado para ustedes).
 */
-int main(int argc, char* argv[]) {
-  bool MEMCHECK_MODE = false;
+static void set_board_at(game_state_t* state, unsigned int row, unsigned int col, char ch) {
+  state->board[row][col] = ch;
+}
 
-  // Parsea los argumentos.
-  for (int i = 1; i < argc; i++) {
-    if (strcmp(argv[i], "-m") == 0) {
-      MEMCHECK_MODE = true;
-      continue;
-    }
-    fprintf(stderr, "Usage: %s [-m]\n", argv[0]);
-    return 1;
+
+/**
+ * Retorna true si la variable c es parte de la cola de una snake.
+ * La cola de una snake consiste de los caracteres: "wasd"
+ * Retorna false de lo contrario.
+*/
+static bool is_tail(char c) {
+  if (c == 'w' || c == 'a' || c == 'd' || c == 's')
+  {
+    return true;
   }
 
-  init_colors();
+  return false;
+}
 
-  printf("%s\n", "Reminder: These tests are not comprehensive, and passing them does not guarantee that your implementation is working.");
 
-  if (MEMCHECK_MODE) {
-    printf("\nTesting free_state...\n");
-    if (!test_free_state()) {
-      return 0;
-    }
+/**
+ * Retorna true si la variable c es parte de la cabeza de una snake.
+ * La cabeza de una snake consiste de los caracteres: "WASDx"
+ * Retorna false de lo contrario.
+*/
+static bool is_head(char c) {
+  if (c == 'W' || c == 'A' || c == 'D' || c == 'S' || c == 'x')
+  {
+    return true;
+  }
+
+  return false;
+}
+
+
+/**
+ * Retorna true si la variable c es parte de una snake.
+ * Una snake consiste de los siguientes caracteres: "wasd^<v>WASDx"
+*/
+static bool is_snake(char c) {
+  if (is_head(c) || is_tail(c) || c == '^' || c == '<' || c == 'v' || c == '>')
+  {
+    return true;
+  }
+  return false;
+}
+
+
+/**
+ * Convierte un caracter del cuerpo de una snake ("^<v>")
+ * al caracter que correspondiente de la cola de una
+ * snake ("wasd").
+*/
+static char body_to_tail(char c) {
+  switch (c) {
+    case '^': return 'w';
+    case '<': return 'a';
+    case 'v': return 's';
+    case '>': return 'd';
+    default:  return '?';
+  }
+}
+
+
+
+/**
+ * Convierte un caracter de la cabeza de una snake ("WASD")
+ * al caracter correspondiente del cuerpo de una snake
+ * ("^<v>").
+*/
+static char head_to_body(char c) {
+  switch (c) {
+    case 'W': return '^';
+    case 'A': return '<';
+    case 'S': return 'v';
+    case 'D': return '>';
+    default:  return '?';
+  }
+}
+
+
+/**
+ * Retorna cur_row + 1 si la variable c es 'v', 's' o 'S'.
+ * Retorna cur_row - 1 si la variable c es '^', 'w' o 'W'.
+ * Retorna cur_row de lo contrario
+*/
+static unsigned int get_next_row(unsigned int cur_row, char c) {
+  if (c == 'v' || c == 's' || c == 'S')
+  {
+    return cur_row + 1;
+  } else if (c == '^' || c == 'w' || c == 'W')
+  {
+    return cur_row - 1;
+  }else{
+    return cur_row;
+  }
+}
+
+
+/**
+ * Retorna cur_col + 1 si la variable c es '>' or 'd' or 'D'.
+ * Retorna cur_col - 1 si la variable c es '<' or 'a' or 'A'.
+ * Retorna cur_col de lo contrario
+*/
+static unsigned int get_next_col(unsigned int cur_col, char c) {
+  // TODO: Implementar esta funcion.
+  if(c == '>' ||c == 'd' ||c == 'D')
+  {
+    return cur_col +1;
+  } else if(c == '<' ||c == 'a' ||c == 'A')
+  {
+    return cur_col -1;
   } else {
-    if (!test_and_print("create_default_state (Task 1)", test_create_default_state)) {
-      return 0;
-    }
-    if (!test_and_print("print_board (Task 3)", test_print_board)) {
-      return 0;
-    }
-    if (!test_and_print("next_square (Task 4)", test_next_square)) {
-      return 0;
-    }
-    if (!test_and_print("update_head (Task 4)", test_update_head)) {
-      return 0;
-    }
-    if (!test_and_print("update_tail (Task 4)", test_update_tail)) {
-      return 0;
-    }
-    if (!test_and_print("update_state (Task 4)", test_update_state)) {
-      return 0;
-    }
-    if (!test_and_print("load_board (Task 5)", test_load_board)) {
-      return 0;
-    }
-    if (!test_and_print("find_head (Task 6)", test_find_head)) {
-      return 0;
-    }
-    if (!test_and_print("initialize_snakes (Task 6)", test_initialize_snakes)) {
-      return 0;
-    }
+    return cur_col;
   }
+}
+
+
+/**
+ * Tarea 4.2
+ *
+ * Funcion de ayuda para update_state. Retorna el caracter de la celda
+ * en donde la snake se va a mover (en el siguiente paso).
+ *
+ * Esta funcion no deberia modificar nada de state.
+*/
+static char next_square(game_state_t* state, unsigned int snum) {
+  // TODO: Implementar esta funcion.
+  return '?';
+}
+
+
+/**
+ * Tarea 4.3
+ *
+ * Funcion de ayuda para update_state. Actualiza la cabeza de la snake...
+ *
+ * ... en el tablero: agregar un caracter donde la snake se va a mover (¿que caracter?)
+ *
+ * ... en la estructura del snake: actualizar el row y col de la cabeza
+ *
+ * Nota: esta funcion ignora la comida, paredes, y cuerpos de otras snakes
+ * cuando se mueve la cabeza.
+*/
+static void update_head(game_state_t* state, unsigned int snum) {
+  // TODO: Implementar esta funcion.
+  return;
+}
+
+
+/**
+ * Tarea 4.4
+ *
+ * Funcion de ayuda para update_state. Actualiza la cola de la snake...
+ *
+ * ... en el tablero: colocar un caracter blanco (spacio) donde se encuentra
+ * la cola actualmente, y cambiar la nueva cola de un caracter de cuerpo (^<v>)
+ * a un caracter de cola (wasd)
+ *
+ * ...en la estructura snake: actualizar el row y col de la cola
+*/
+static void update_tail(game_state_t* state, unsigned int snum) {
+  // TODO: Implementar esta funcion.
+  return;
+}
+
+/* Tarea 4.5 */
+void update_state(game_state_t* state, int (*add_food)(game_state_t* state)) {
+  // TODO: Implementar esta funcion.
+  return;
+}
+
+/* Tarea 5 */
+game_state_t* load_board(char* filename) {
+  // TODO: Implementar esta funcion.
+  return NULL;
+}
+
+
+/**
+ * Tarea 6.1
+ *
+ * Funcion de ayuda para initialize_snakes.
+ * Dada una structura de snake con los datos de cola row y col ya colocados,
+ * atravezar el tablero para encontrar el row y col de la cabeza de la snake,
+ * y colocar esta informacion en la estructura de la snake correspondiente
+ * dada por la variable (snum)
+*/
+static void find_head(game_state_t* state, unsigned int snum) {
+  // TODO: Implementar esta funcion.
+  return;
+}
+
+/* Tarea 6.2 */
+game_state_t* initialize_snakes(game_state_t* state) {
+  // TODO: Implementar esta funcion.
+  return NULL;
 }

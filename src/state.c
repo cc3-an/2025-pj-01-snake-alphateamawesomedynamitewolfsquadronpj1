@@ -24,6 +24,7 @@ static void update_head(game_state_t* state, unsigned int snum);
 /* Tarea 1 */
 game_state_t* create_default_state() {
   // TODO: Implementar esta funcion.
+  
   return NULL;
 }
 
