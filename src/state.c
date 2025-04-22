@@ -135,12 +135,11 @@ void save_board(game_state_t* state, char* filename) {
 }
 
 /* Tarea 4.1 */
-
-
 /**
  * Funcion de ayuda que obtiene un caracter del tablero dado una fila y columna
  * (ya implementado para ustedes).
 */
+//*TERMINADA
 char get_board_at(game_state_t* state, unsigned int row, unsigned int col) {
   return state->board[row][col];
 }
@@ -151,6 +150,7 @@ char get_board_at(game_state_t* state, unsigned int row, unsigned int col) {
  * un caracter.
  * (ya implementado para ustedes).
 */
+//*TERMINADA
 static void set_board_at(game_state_t* state, unsigned int row, unsigned int col, char ch) {
   state->board[row][col] = ch;
 }
@@ -161,6 +161,7 @@ static void set_board_at(game_state_t* state, unsigned int row, unsigned int col
  * La cola de una snake consiste de los caracteres: "wasd"
  * Retorna false de lo contrario.
 */
+//*TERMINADA
 static bool is_tail(char c) {
   if (c == 'w' || c == 'a' || c == 'd' || c == 's')
   {
@@ -176,6 +177,7 @@ static bool is_tail(char c) {
  * La cabeza de una snake consiste de los caracteres: "WASDx"
  * Retorna false de lo contrario.
 */
+//*TERMINADA
 static bool is_head(char c) {
   if (c == 'W' || c == 'A' || c == 'D' || c == 'S' || c == 'x')
   {
@@ -190,6 +192,7 @@ static bool is_head(char c) {
  * Retorna true si la variable c es parte de una snake.
  * Una snake consiste de los siguientes caracteres: "wasd^<v>WASDx"
 */
+//*TERMINADA
 static bool is_snake(char c) {
   if (is_head(c) || is_tail(c) || c == '^' || c == '<' || c == 'v' || c == '>')
   {
@@ -204,6 +207,7 @@ static bool is_snake(char c) {
  * al caracter que correspondiente de la cola de una
  * snake ("wasd").
 */
+//*TERMINADA
 static char body_to_tail(char c) {
   switch (c) {
     case '^': return 'w';
@@ -221,6 +225,7 @@ static char body_to_tail(char c) {
  * al caracter correspondiente del cuerpo de una snake
  * ("^<v>").
 */
+//*TERMINADA
 static char head_to_body(char c) {
   switch (c) {
     case 'W': return '^';
@@ -237,6 +242,7 @@ static char head_to_body(char c) {
  * Retorna cur_row - 1 si la variable c es '^', 'w' o 'W'.
  * Retorna cur_row de lo contrario
 */
+//*TERMINADA
 static unsigned int get_next_row(unsigned int cur_row, char c) {
   if (c == 'v' || c == 's' || c == 'S')
   {
@@ -255,6 +261,7 @@ static unsigned int get_next_row(unsigned int cur_row, char c) {
  * Retorna cur_col - 1 si la variable c es '<' or 'a' or 'A'.
  * Retorna cur_col de lo contrario
 */
+//*TERMINADA
 static unsigned int get_next_col(unsigned int cur_col, char c) {
   if(c == '>' ||c == 'd' ||c == 'D')
   {
@@ -276,6 +283,7 @@ static unsigned int get_next_col(unsigned int cur_col, char c) {
  *
  * Esta funcion no deberia modificar nada de state.
 */
+//*TERMINADA
 static char next_square(game_state_t* state, unsigned int snum) {
   snake_t serpiente = state->snakes[snum];
   char cabeza = get_board_at(state,serpiente.head_row, serpiente.head_col);
@@ -297,29 +305,37 @@ static char next_square(game_state_t* state, unsigned int snum) {
  * Nota: esta funcion ignora la comida, paredes, y cuerpos de otras snakes
  * cuando se mueve la cabeza.
 */
+//*TERMINADA
 static void update_head(game_state_t* state, unsigned int snum) {
+  //Obtenemos la serpiente a modificar.
   snake_t* serpiente = &state->snakes[snum];
+  //Obtenemos la direccion/caracter de la cabeza.
   char cabeza = get_board_at(state,serpiente->head_row, serpiente->head_col);
-  unsigned  cabeza_row = serpiente->head_row;
-  unsigned  cabeza_col = serpiente->head_col;
+  //Obtenemos las coordenadas de la cabeza.
+  unsigned int cabeza_row = serpiente->head_row;
+  unsigned int cabeza_col = serpiente->head_col;
+  //Modificamos la cabeza y movemos el cuerpo dependiendo de la direccion a la que se dirija.
   if (cabeza == 'D')
   {
-  //Cambiar la coordenada de la cabeza por un > y poner uno a la derecha la cabeza.
+    //Cambiar la coordenada de la cabeza por un > y poner uno a la derecha la cabeza.
     set_board_at(state,cabeza_row,cabeza_col + 1, 'D');
     set_board_at(state,cabeza_row,cabeza_col, '>');
     serpiente->head_col +=1;
   } else if (cabeza == 'A')
   {
+    //Cambiar la coordenada de la cabeza por un < y poner uno a la izquierda la cabeza.
     set_board_at(state,cabeza_row,cabeza_col-1, 'A');
     set_board_at(state,cabeza_row,cabeza_col, '<');
     serpiente->head_col -=1;
   } else if (cabeza == 'W')
   {
+    //Cambiar la coordenada de la cabeza por un ^ y poner uno hacia arriba la cabeza.
     set_board_at(state,cabeza_row-1,cabeza_col, 'W');
     set_board_at(state,cabeza_row,cabeza_col, '^');
     serpiente->head_row -=1;
   } else if (cabeza == 'S')
   {
+    //Cambiar la coordenada de la cabeza por un v y poner uno hacia abajo la cabeza.
     set_board_at(state,cabeza_row+1,cabeza_col, 'S');
     set_board_at(state,cabeza_row,cabeza_col, 'v');
     serpiente->head_row +=1;
@@ -339,14 +355,77 @@ static void update_head(game_state_t* state, unsigned int snum) {
  *
  * ...en la estructura snake: actualizar el row y col de la cola
 */
+//*TERMINADA
 static void update_tail(game_state_t* state, unsigned int snum) {
-  // TODO: Implementar esta funcion.
+  //Obtenemos la serpiente a modificar.
+  snake_t* serpiente = &state->snakes[snum];
+  //Obtenemos el direccion/caracter de la cola.
+  char cola = get_board_at(state,serpiente->tail_row, serpiente->tail_col);
+  //Obtenemos las coordenadas de la cola.
+  unsigned int cola_row = serpiente->tail_row;
+  unsigned int cola_col = serpiente->tail_col;
+  //Modificamos la cola por un espacio vacio y las coordenadas de la cola.
+  if (cola == 'd'){
+    set_board_at(state,cola_row,cola_col, ' ');
+    cola_col +=1;
+  } else if (cola == 'a'){
+    set_board_at(state,cola_row,cola_col, ' ');
+    cola_col -=1;
+  } else if (cola == 'w'){
+    set_board_at(state,cola_row,cola_col, ' ');
+    cola_row -=1;
+  } else if (cola == 's'){
+    set_board_at(state,cola_row,cola_col, ' ');
+    cola_row+=1;
+  }
+  //Se obtiene el siquiente caracter para saber la direccion de la cola nueva.
+  char siguiente = get_board_at(state, cola_row, cola_col);
+  if (siguiente == '>'){
+    set_board_at(state, cola_row, cola_col, 'd');
+  }else if (siguiente == '<'){
+    set_board_at(state, cola_row, cola_col, 'a');
+  }else if (siguiente == '^'){
+    set_board_at(state, cola_row, cola_col, 'w');
+  }else if (siguiente == 'v'){
+    set_board_at(state, cola_row, cola_col, 's');
+  }
+  //Actualizamos las coordenadas de la cola.
+  serpiente->tail_row = cola_row;
+  serpiente->tail_col = cola_col;
   return;
 }
 
 /* Tarea 4.5 */
+//*TERMINADA
 void update_state(game_state_t* state, int (*add_food)(game_state_t* state)) {
-  // TODO: Implementar esta funcion.
+  //Iterara por cada serpiente que existe en el tablero.
+  for (unsigned i = 0; i < state->num_snakes; i++)
+  {
+    //Obtenemos la serpiente que verificaremos.
+    snake_t* serpiente_actual = &state->snakes[i];
+    //Verificamos si esta viva para saber si es posible editarla.
+    if (serpiente_actual->live == true){
+      //Obtenemos la casilla a la que debe dirigirse.
+      char siguiente_espacio = next_square(state, i);
+      /*
+      -Si es una fruta se aumenta en cuerpo en uno (solo moviendo la cabeza uno mas) y agregamos otra comida en el tablero.
+      -Si es un espacio vacio solo movemos en un espacio tanto a la cabeza como a la cola.
+      -Si es una pares u otra serpiente entonces morira cambiando el estado y colocando una x en su cabeza.
+      */
+      if (siguiente_espacio == '*'){
+        update_head(state, i);
+        add_food(state);
+      } else if (siguiente_espacio == ' '){
+        update_head(state, i);
+        update_tail(state,i);
+      } else if (siguiente_espacio == '#' || is_snake(siguiente_espacio)){
+        serpiente_actual->live = false;
+        unsigned int cabeza_row = serpiente_actual->head_row;
+        unsigned int cabeza_col = serpiente_actual->head_col;
+        set_board_at(state, cabeza_row, cabeza_col, 'x');
+      }
+    }
+  }
   return;
 }
 
