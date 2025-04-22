@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include "state.h"
 #include "asserts.h"
 
 // Necesario por las funciones static en state.c
@@ -108,39 +108,58 @@ bool test_is_vowel() {
 /* Task 4.1 */
 
 bool test_is_tail() {
-  // TODO: Implementar esta funcion
-  return true;
+  return is_tail('w') && is_tail('a') && is_tail('s') && is_tail('d') &&
+         !is_tail('W') && !is_tail('^') && !is_tail('x');
 }
 
 bool test_is_head() {
-  // TODO: Implementar esta funcion
-  return true;
+  return is_head('W') && is_head('A') && is_head('S') && is_head('D') && is_head('x') &&
+         !is_head('w') && !is_head('^') && !is_head('>');
 }
 
 bool test_is_snake() {
-  // TODO: Implementar esta funcion
-  return true;
+  return is_snake('w') && is_snake('a') && is_snake('s') && is_snake('d') &&
+         is_snake('^') && is_snake('<') && is_snake('v') && is_snake('>') &&
+         is_snake('W') && is_snake('A') && is_snake('S') && is_snake('D') && is_snake('x') &&
+         !is_snake('#') && !is_snake('*') && !is_snake(' ');
 }
 
 bool test_body_to_tail() {
-  // TODO: Implementar esta funcion
-  return true;
+  return body_to_tail('^') == 'w' &&
+         body_to_tail('<') == 'a' &&
+         body_to_tail('v') == 's' &&
+         body_to_tail('>') == 'd';
 }
 
 bool test_head_to_body() {
-  // TODO: Implement this function.
-  return true;
+  return head_to_body('W') == '^' &&
+         head_to_body('A') == '<' &&
+         head_to_body('S') == 'v' &&
+         head_to_body('D') == '>';
 }
 
 bool test_get_next_row() {
-  // TODO: Implement this function.
-  return true;
+  return get_next_row(5, 'v') == 6 &&
+         get_next_row(5, 's') == 6 &&
+         get_next_row(5, 'S') == 6 &&
+         get_next_row(5, '^') == 4 &&
+         get_next_row(5, 'w') == 4 &&
+         get_next_row(5, 'W') == 4 &&
+         get_next_row(5, 'a') == 5 &&
+         get_next_row(5, 'D') == 5;
 }
 
 bool test_get_next_col() {
-  // TODO: Implementar esta funcion
-  return true;
+  return get_next_col(5, '>') == 6 &&
+         get_next_col(5, 'd') == 6 &&
+         get_next_col(5, 'D') == 6 &&
+         get_next_col(5, '<') == 4 &&
+         get_next_col(5, 'a') == 4 &&
+         get_next_col(5, 'A') == 4 &&
+         get_next_col(5, '^') == 5 &&
+         get_next_col(5, 'w') == 5;
 }
+
 
 bool test_customs() {
   if (!test_greater_than_forty_two()) {
