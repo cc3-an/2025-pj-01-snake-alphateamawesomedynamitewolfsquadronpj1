@@ -26,7 +26,9 @@ static void update_head(game_state_t* state, unsigned int snum);
 game_state_t* create_default_state() {
   //Guardamos memoria para estado inicial.
   game_state_t *initial_state = malloc(sizeof(game_state_t));
-  if (!initial_state) return NULL;
+  if (!initial_state){
+    return NULL;
+  }
   //Configuramos dimensiones.
   initial_state->num_rows = 18;
   initial_state->board = malloc(sizeof(char *) * initial_state->num_rows);
@@ -431,8 +433,59 @@ void update_state(game_state_t* state, int (*add_food)(game_state_t* state)) {
 
 /* Tarea 5 */
 game_state_t* load_board(char* filename) {
-  // TODO: Implementar esta funcion.
-  return NULL;
+    FILE* archivo = fopen(filename, "r");
+    if (archivo == NULL){
+      return NULL;
+    }
+    game_state_t* state = malloc(sizeof(game_state_t));
+    state->num_snakes = 0;
+    state->snakes = NULL;
+
+    unsigned int filas_capacidad = 8;
+    state->board = malloc(filas_capacidad * sizeof(char*));
+    state->num_rows = 0;
+
+    unsigned int col_capacidad = 8;
+    char* fila_actual = malloc(col_capacidad);
+    unsigned int col = 0;
+
+    int c;
+    while ((c = fgetc(archivo)) != EOF) {
+        if (c == '\n') {
+            fila_actual[col] = '\0';
+
+            if (state->num_rows >= filas_capacidad) {
+                filas_capacidad = state->num_rows + 1;
+                state->board = realloc(state->board, filas_capacidad * sizeof(char*));
+            }
+
+            state->board[state->num_rows++] = fila_actual;
+
+            col_capacidad = 8;
+            fila_actual = malloc(col_capacidad);
+            col = 0;
+        } else {
+            if (col >= col_capacidad - 1) {
+                col_capacidad = col + 1;
+                fila_actual = realloc(fila_actual, col_capacidad);
+            }
+            fila_actual[col++] = (char)c;
+        }
+    }
+
+    if (col > 0) {
+        fila_actual[col] = '\0';
+        if (state->num_rows >= filas_capacidad) {
+            filas_capacidad = state->num_rows + 1;
+            state->board = realloc(state->board, filas_capacidad * sizeof(char*));
+        }
+        state->board[state->num_rows++] = fila_actual;
+    } else {
+        free(fila_actual);
+    }
+
+    fclose(archivo);
+    return state;
 }
 
 
@@ -446,12 +499,50 @@ game_state_t* load_board(char* filename) {
  * dada por la variable (snum)
 */
 static void find_head(game_state_t* state, unsigned int snum) {
-  // TODO: Implementar esta funcion.
-  return;
+  snake_t* snake = &state->snakes[snum];
+  unsigned int cola_row = snake->tail_row;
+  unsigned int cola_col = snake->tail_col;
+  char c = state->board[cola_row][cola_col];
+
+  while (!is_head(c)) {
+        cola_row = get_next_row(cola_row, c);
+        cola_col = get_next_col(cola_col, c);
+        c = state->board[cola_row][cola_col];
+  }
+  snake->head_row = cola_row;
+  snake->head_col = cola_col;
 }
+
 
 /* Tarea 6.2 */
 game_state_t* initialize_snakes(game_state_t* state) {
-  // TODO: Implementar esta funcion.
-  return NULL;
+  if (state == NULL) {
+      return NULL;
+  }
+  unsigned int snake_count = 0;
+  for (unsigned int i = 0; i < state->num_rows; i++) {
+      for (unsigned int j = 0; state->board[i][j] != '\0'; j++) {
+          if (is_tail(state->board[i][j])) {
+              snake_count++;
+          }
+      }
+  }
+  state->snakes = malloc(sizeof(snake_t) * snake_count);
+  if (state->snakes == NULL) {
+      return NULL;
+  }
+  state->num_snakes = snake_count;
+  unsigned int indice = 0;
+  for (unsigned int i = 0; i < state->num_rows; i++) {
+      for (unsigned int j = 0; state->board[i][j] != '\0'; j++) {
+          if (is_tail(state->board[i][j])) {
+              state->snakes[indice].tail_row = i;
+              state->snakes[indice].tail_col = j;
+              state->snakes[indice].live = true;
+              find_head(state, indice);
+              indice++;
+          }
+      }
+  }
+  return state;
 }
