@@ -28,7 +28,14 @@ int main(int argc, char* argv[]) {
   // NO MODIFIQUEN NADA ARRIBA DE ESTA LINEA.
 
   /* Tarea 7 */
-  //*TERMINADA
+  /************************************************************
+   *  Desarolladores                                          *
+   *    - María Claudia Lainfiesta Herrera - 24000149         *
+   *    - Adriel Levi Argueta Caal - 24003171                 *
+   *                                                          *
+   *  Proyecto: C Snake                                       *
+   *  Equipo: Alpha Team Awesome Dynamite Wolf Squadron       *
+   ************************************************************/
   if (in_filename != NULL) {
     state = load_board(in_filename);
     if (state == NULL) {

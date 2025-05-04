@@ -106,6 +106,14 @@ bool test_is_vowel() {
 }
 
 /* Task 4.1 */
+/************************************************************
+ *  Desarolladores                                          *
+ *    - María Claudia Lainfiesta Herrera - 24000149         *
+ *    - Adriel Levi Argueta Caal - 24003171                 *
+ *                                                          *
+ *  Proyecto: C Snake                                       *
+ *  Equipo: Alpha Team Awesome Dynamite Wolf Squadron       *
+ ************************************************************/
 
 bool test_is_tail() {
   return is_tail('w') && is_tail('a') && is_tail('s') && is_tail('d') &&
