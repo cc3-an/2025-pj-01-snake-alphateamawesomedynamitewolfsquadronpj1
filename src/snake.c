@@ -28,8 +28,7 @@ int main(int argc, char* argv[]) {
   // NO MODIFIQUEN NADA ARRIBA DE ESTA LINEA.
 
   /* Tarea 7 */
-
-  // Leer el tablero de un archivo, o crear un tablero por defecto.
+  //*TERMINADA
   if (in_filename != NULL) {
     state = load_board(in_filename);
     if (state == NULL) {
@@ -38,13 +37,11 @@ int main(int argc, char* argv[]) {
     }
     state = initialize_snakes(state);
   } else {
-    state = create_default_state();  // función proporcionada por los tests
+    state = create_default_state();
   }
 
-  // Actualizar el estado del juego y generar nueva comida
   update_state(state, &deterministic_food);
 
-  // Escribir el tablero actualizado al archivo o a stdout
   if (out_filename != NULL) {
     FILE* f = fopen(out_filename, "w");
     if (f == NULL) {
@@ -58,7 +55,6 @@ int main(int argc, char* argv[]) {
     print_board(state, stdout);
   }
 
-  // Liberar memoria del estado
   free_state(state);
 
   return 0;
